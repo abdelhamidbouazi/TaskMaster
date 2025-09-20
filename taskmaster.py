@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """
 TaskMaster - A Powerful Task Management CLI Tool
-Features:
-- Task creation with priorities, categories, and due dates
-- Time tracking and estimation
-- Task dependencies and subtasks
-- Analytics and reporting
-- Search and filtering
-- Data persistence with JSON
-- Backup and restore
-- Pomodoro timer integration
+
+A command-line task management system with priorities, time tracking,
+analytics, search filtering, and Pomodoro timer integration.
 """
 
 import json
@@ -94,7 +88,6 @@ class TaskManager:
     
     def save_tasks(self):
         try:
-            # Create backup before saving
             if os.path.exists(self.data_file):
                 backup_file = os.path.join(
                     self.backup_dir, 
@@ -119,11 +112,9 @@ class TaskManager:
         return task_id
     
     def get_task(self, task_id: str) -> Optional[Task]:
-        # Try to find full task ID from partial ID first
         full_task_id = self.find_task_by_partial_id(task_id)
         if full_task_id:
             return self.tasks.get(full_task_id)
-        # Fall back to direct lookup for full ID
         return self.tasks.get(task_id)
     
     def find_task_by_partial_id(self, partial_id: str) -> Optional[str]:
@@ -145,7 +136,6 @@ class TaskManager:
             return None
     
     def update_task(self, task_id: str, **kwargs) -> bool:
-        # Try to find full task ID from partial ID
         full_task_id = self.find_task_by_partial_id(task_id)
         if not full_task_id:
             if task_id not in self.tasks:
@@ -161,7 +151,6 @@ class TaskManager:
         return True
     
     def delete_task(self, task_id: str) -> bool:
-        # Try to find full task ID from partial ID
         full_task_id = self.find_task_by_partial_id(task_id)
         if not full_task_id:
             if task_id not in self.tasks:
@@ -189,7 +178,6 @@ class TaskManager:
                 tasks = [t for t in tasks if t.due_date and 
                         datetime.fromisoformat(t.due_date).date() <= tomorrow]
         
-        # Sort by priority (high to low), then by due date
         tasks.sort(key=lambda t: (
             -t.priority,
             datetime.fromisoformat(t.due_date) if t.due_date else datetime.max
@@ -207,7 +195,6 @@ class TaskManager:
         ]
     
     def add_time_entry(self, task_id: str, hours: float) -> bool:
-        # Try to find full task ID from partial ID
         full_task_id = self.find_task_by_partial_id(task_id)
         if not full_task_id:
             if task_id not in self.tasks:
@@ -225,7 +212,6 @@ class TaskManager:
         deleted_tasks = []
         
         for task_id in task_ids:
-            # Try to find full task ID from partial ID
             full_task_id = self.find_task_by_partial_id(task_id)
             if not full_task_id:
                 if task_id not in self.tasks:
@@ -233,11 +219,9 @@ class TaskManager:
                     continue
                 full_task_id = task_id
             
-            # Store for deletion
             deleted_tasks.append((task_id, full_task_id))
             results[task_id] = True
         
-        # Delete all successful tasks
         for original_id, full_id in deleted_tasks:
             del self.tasks[full_id]
         
@@ -252,7 +236,6 @@ class TaskManager:
         updated_tasks = []
         
         for task_id in task_ids:
-            # Try to find full task ID from partial ID
             full_task_id = self.find_task_by_partial_id(task_id)
             if not full_task_id:
                 if task_id not in self.tasks:
@@ -260,7 +243,6 @@ class TaskManager:
                     continue
                 full_task_id = task_id
             
-            # Update task status
             self.tasks[full_task_id].status = Status.DONE.value
             self.tasks[full_task_id].updated_at = datetime.now().isoformat()
             updated_tasks.append((task_id, full_task_id))
@@ -277,7 +259,6 @@ class TaskManager:
         updated_tasks = []
         
         for task_id in task_ids:
-            # Try to find full task ID from partial ID
             full_task_id = self.find_task_by_partial_id(task_id)
             if not full_task_id:
                 if task_id not in self.tasks:
@@ -285,7 +266,6 @@ class TaskManager:
                     continue
                 full_task_id = task_id
             
-            # Update task properties
             task = self.tasks[full_task_id]
             for key, value in kwargs.items():
                 if hasattr(task, key):
@@ -363,7 +343,6 @@ class PomodoroTimer:
             end_time = time.time()
             actual_minutes = (end_time - start_time) / 60
             
-            # Log time to task
             task_manager.add_time_entry(task_id, actual_minutes / 60)
             
             print(f"✅ Work session completed! Logged {actual_minutes:.1f} minutes")
@@ -583,7 +562,6 @@ def main():
         if hasattr(args, 'due') and args.due:
             kwargs['due_date'] = args.due
             
-        # Find full task ID for display
         full_task_id = tm.find_task_by_partial_id(args.task_id)
         if not full_task_id and args.task_id not in tm.tasks:
             print(f"❌ Task [{args.task_id}] not found")
@@ -613,7 +591,6 @@ def main():
         failed = [task_id for task_id, success in results.items() if not success]
         
         if successful:
-            # Show what properties were updated
             updates = []
             if args.status:
                 updates.append(f"status={args.status}")
@@ -631,7 +608,6 @@ def main():
     
     elif args.command == 'complete':
         if len(args.task_ids) == 1:
-            # Single task - existing logic
             task_id = args.task_ids[0]
             full_task_id = tm.find_task_by_partial_id(task_id)
             if not full_task_id and task_id not in tm.tasks:
@@ -642,7 +618,6 @@ def main():
             else:
                 print(f"❌ Task [{task_id}] not found")
         else:
-            # Multiple tasks - bulk operation
             results = tm.bulk_complete_tasks(args.task_ids)
             successful = [task_id for task_id, success in results.items() if success]
             failed = [task_id for task_id, success in results.items() if not success]
@@ -654,7 +629,6 @@ def main():
     
     elif args.command == 'delete' or args.command == 'remove':
         if len(args.task_ids) == 1:
-            # Single task - existing logic
             task_id = args.task_ids[0]
             full_task_id = tm.find_task_by_partial_id(task_id)
             if not full_task_id and task_id not in tm.tasks:
@@ -665,7 +639,6 @@ def main():
             else:
                 print(f"❌ Task [{task_id}] not found")
         else:
-            # Multiple tasks - bulk operation
             results = tm.bulk_delete_tasks(args.task_ids)
             successful = [task_id for task_id, success in results.items() if success]
             failed = [task_id for task_id, success in results.items() if not success]
@@ -692,7 +665,6 @@ def main():
             print(f"❌ Task [{args.task_id}] not found")
     
     elif args.command == 'time':
-        # Find full task ID for display
         full_task_id = tm.find_task_by_partial_id(args.task_id)
         if not full_task_id and args.task_id not in tm.tasks:
             print(f"❌ Task [{args.task_id}] not found")
@@ -708,7 +680,6 @@ def main():
             print(f"❌ Task [{args.task_id}] not found")
             return
             
-        # Find full task ID for the timer
         full_task_id = tm.find_task_by_partial_id(args.task_id)
         timer_task_id = full_task_id if full_task_id else args.task_id
         
