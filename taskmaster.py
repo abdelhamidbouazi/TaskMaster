@@ -219,6 +219,86 @@ class TaskManager:
         self.save_tasks()
         return True
     
+    def bulk_delete_tasks(self, task_ids: List[str]) -> Dict[str, bool]:
+        """Delete multiple tasks. Returns dict of task_id -> success status."""
+        results = {}
+        deleted_tasks = []
+        
+        for task_id in task_ids:
+            # Try to find full task ID from partial ID
+            full_task_id = self.find_task_by_partial_id(task_id)
+            if not full_task_id:
+                if task_id not in self.tasks:
+                    results[task_id] = False
+                    continue
+                full_task_id = task_id
+            
+            # Store for deletion
+            deleted_tasks.append((task_id, full_task_id))
+            results[task_id] = True
+        
+        # Delete all successful tasks
+        for original_id, full_id in deleted_tasks:
+            del self.tasks[full_id]
+        
+        if deleted_tasks:
+            self.save_tasks()
+        
+        return results
+    
+    def bulk_complete_tasks(self, task_ids: List[str]) -> Dict[str, bool]:
+        """Mark multiple tasks as complete. Returns dict of task_id -> success status."""
+        results = {}
+        updated_tasks = []
+        
+        for task_id in task_ids:
+            # Try to find full task ID from partial ID
+            full_task_id = self.find_task_by_partial_id(task_id)
+            if not full_task_id:
+                if task_id not in self.tasks:
+                    results[task_id] = False
+                    continue
+                full_task_id = task_id
+            
+            # Update task status
+            self.tasks[full_task_id].status = Status.DONE.value
+            self.tasks[full_task_id].updated_at = datetime.now().isoformat()
+            updated_tasks.append((task_id, full_task_id))
+            results[task_id] = True
+        
+        if updated_tasks:
+            self.save_tasks()
+        
+        return results
+    
+    def bulk_update_tasks(self, task_ids: List[str], **kwargs) -> Dict[str, bool]:
+        """Update multiple tasks with same properties. Returns dict of task_id -> success status."""
+        results = {}
+        updated_tasks = []
+        
+        for task_id in task_ids:
+            # Try to find full task ID from partial ID
+            full_task_id = self.find_task_by_partial_id(task_id)
+            if not full_task_id:
+                if task_id not in self.tasks:
+                    results[task_id] = False
+                    continue
+                full_task_id = task_id
+            
+            # Update task properties
+            task = self.tasks[full_task_id]
+            for key, value in kwargs.items():
+                if hasattr(task, key):
+                    setattr(task, key, value)
+            task.updated_at = datetime.now().isoformat()
+            updated_tasks.append((task_id, full_task_id))
+            results[task_id] = True
+        
+        if updated_tasks:
+            self.save_tasks()
+        
+        return results
+    
     def get_analytics(self) -> Dict[str, Any]:
         tasks = list(self.tasks.values())
         total_tasks = len(tasks)
@@ -392,13 +472,25 @@ def main():
     update_parser.add_argument('-c', '--category', help='New category')
     update_parser.add_argument('--due', help='New due date (YYYY-MM-DD)')
     
+    # Bulk update tasks
+    bulk_update_parser = subparsers.add_parser('bulk-update', help='Update multiple tasks with same properties')
+    bulk_update_parser.add_argument('task_ids', nargs='+', help='Task ID(s) - supports multiple IDs')
+    bulk_update_parser.add_argument('-s', '--status', choices=['todo', 'in_progress', 'blocked', 'done', 'cancelled'], help='New status')
+    bulk_update_parser.add_argument('-p', '--priority', type=int, choices=[1,2,3,4], help='New priority')
+    bulk_update_parser.add_argument('-c', '--category', help='New category')
+    bulk_update_parser.add_argument('--due', help='New due date (YYYY-MM-DD)')
+    
     # Complete task
-    complete_parser = subparsers.add_parser('complete', help='Mark task as complete')
-    complete_parser.add_argument('task_id', help='Task ID')
+    complete_parser = subparsers.add_parser('complete', help='Mark task(s) as complete')
+    complete_parser.add_argument('task_ids', nargs='+', help='Task ID(s) - supports multiple IDs')
     
     # Delete task
-    delete_parser = subparsers.add_parser('delete', help='Delete a task')
-    delete_parser.add_argument('task_id', help='Task ID')
+    delete_parser = subparsers.add_parser('delete', help='Delete task(s)')
+    delete_parser.add_argument('task_ids', nargs='+', help='Task ID(s) - supports multiple IDs')
+    
+    # Add remove as alias for delete
+    remove_parser = subparsers.add_parser('remove', help='Remove task(s) (alias for delete)')
+    remove_parser.add_argument('task_ids', nargs='+', help='Task ID(s) - supports multiple IDs')
     
     # Search tasks
     search_parser = subparsers.add_parser('search', help='Search tasks')
@@ -501,27 +593,87 @@ def main():
         else:
             print(f"❌ Task [{args.task_id}] not found")
     
-    elif args.command == 'complete':
-        # Find full task ID for display
-        full_task_id = tm.find_task_by_partial_id(args.task_id)
-        if not full_task_id and args.task_id not in tm.tasks:
-            print(f"❌ Task [{args.task_id}] not found")
-        elif tm.update_task(args.task_id, status=Status.DONE.value):
-            display_id = full_task_id if full_task_id else args.task_id
-            print(f"🎉 Completed task [{display_id}]")
-        else:
-            print(f"❌ Task [{args.task_id}] not found")
+    elif args.command == 'bulk-update':
+        kwargs = {}
+        if args.status:
+            kwargs['status'] = args.status
+        if args.priority:
+            kwargs['priority'] = args.priority
+        if args.category:
+            kwargs['category'] = args.category
+        if hasattr(args, 'due') and args.due:
+            kwargs['due_date'] = args.due
+            
+        if not kwargs:
+            print("❌ No update properties specified. Use -s, -p, -c, or --due to specify changes.")
+            return
+            
+        results = tm.bulk_update_tasks(args.task_ids, **kwargs)
+        successful = [task_id for task_id, success in results.items() if success]
+        failed = [task_id for task_id, success in results.items() if not success]
+        
+        if successful:
+            # Show what properties were updated
+            updates = []
+            if args.status:
+                updates.append(f"status={args.status}")
+            if args.priority:
+                updates.append(f"priority={args.priority}")
+            if args.category:
+                updates.append(f"category={args.category}")
+            if hasattr(args, 'due') and args.due:
+                updates.append(f"due={args.due}")
+            
+            update_str = ', '.join(updates)
+            print(f"✅ Updated {len(successful)} task(s) with {update_str}: {', '.join(successful)}")
+        if failed:
+            print(f"❌ Failed to find {len(failed)} task(s): {', '.join(failed)}")
     
-    elif args.command == 'delete':
-        # Find full task ID for display
-        full_task_id = tm.find_task_by_partial_id(args.task_id)
-        if not full_task_id and args.task_id not in tm.tasks:
-            print(f"❌ Task [{args.task_id}] not found")
-        elif tm.delete_task(args.task_id):
-            display_id = full_task_id if full_task_id else args.task_id
-            print(f"🗑️  Deleted task [{display_id}]")
+    elif args.command == 'complete':
+        if len(args.task_ids) == 1:
+            # Single task - existing logic
+            task_id = args.task_ids[0]
+            full_task_id = tm.find_task_by_partial_id(task_id)
+            if not full_task_id and task_id not in tm.tasks:
+                print(f"❌ Task [{task_id}] not found")
+            elif tm.update_task(task_id, status=Status.DONE.value):
+                display_id = full_task_id if full_task_id else task_id
+                print(f"🎉 Completed task [{display_id}]")
+            else:
+                print(f"❌ Task [{task_id}] not found")
         else:
-            print(f"❌ Task [{args.task_id}] not found")
+            # Multiple tasks - bulk operation
+            results = tm.bulk_complete_tasks(args.task_ids)
+            successful = [task_id for task_id, success in results.items() if success]
+            failed = [task_id for task_id, success in results.items() if not success]
+            
+            if successful:
+                print(f"🎉 Completed {len(successful)} task(s): {', '.join(successful)}")
+            if failed:
+                print(f"❌ Failed to find {len(failed)} task(s): {', '.join(failed)}")
+    
+    elif args.command == 'delete' or args.command == 'remove':
+        if len(args.task_ids) == 1:
+            # Single task - existing logic
+            task_id = args.task_ids[0]
+            full_task_id = tm.find_task_by_partial_id(task_id)
+            if not full_task_id and task_id not in tm.tasks:
+                print(f"❌ Task [{task_id}] not found")
+            elif tm.delete_task(task_id):
+                display_id = full_task_id if full_task_id else task_id
+                print(f"🗑️  Deleted task [{display_id}]")
+            else:
+                print(f"❌ Task [{task_id}] not found")
+        else:
+            # Multiple tasks - bulk operation
+            results = tm.bulk_delete_tasks(args.task_ids)
+            successful = [task_id for task_id, success in results.items() if success]
+            failed = [task_id for task_id, success in results.items() if not success]
+            
+            if successful:
+                print(f"🗑️  Deleted {len(successful)} task(s): {', '.join(successful)}")
+            if failed:
+                print(f"❌ Failed to find {len(failed)} task(s): {', '.join(failed)}")
     
     elif args.command == 'search':
         tasks = tm.search_tasks(args.query)

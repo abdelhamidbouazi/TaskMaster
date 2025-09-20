@@ -20,6 +20,7 @@ TaskMaster is an intuitive CLI tool that helps you manage tasks efficiently with
 - 📅 **Due Dates**: Set and track due dates with overdue warnings
 - 💾 **Auto Backup**: Automatic backup system to prevent data loss
 - 🚀 **Partial Task IDs**: Use just 3 characters instead of full task IDs for quick actions
+- 🔥 **Bulk Operations**: Delete, complete, or update multiple tasks at once
 - 📦 **Export/Import**: Backup and restore your tasks in JSON format
 
 ## 🚀 Quick Start
@@ -126,6 +127,20 @@ tasks complete abc
 tasks delete abc
 ```
 
+#### Bulk Operations
+```bash
+# Delete multiple tasks at once
+tasks delete abc def ghi
+tasks remove abc def ghi  # 'remove' is an alias for 'delete'
+
+# Complete multiple tasks at once
+tasks complete abc def ghi
+
+# Update multiple tasks with same properties
+tasks bulk-update abc def ghi -s in_progress -p 3
+tasks bulk-update abc def -c development --due 2024-02-01
+```
+
 #### Time Tracking
 ```bash
 # Log time spent on a task
@@ -195,6 +210,22 @@ TaskMaster automatically tracks and warns about due dates:
 - 📅 **Due TODAY** - Tasks due today
 - 📅 **Due TOMORROW** - Tasks due tomorrow
 - 📅 **Due in X days** - Future due dates
+
+### Bulk Operations
+Perform operations on multiple tasks at once for maximum efficiency:
+
+```bash
+# Delete multiple tasks
+tasks delete a1b c2d e3f
+
+# Complete multiple tasks
+tasks complete a1b c2d e3f
+
+# Update multiple tasks with same properties
+tasks bulk-update a1b c2d e3f -s in_progress -p 4
+```
+
+All bulk operations support partial task IDs and provide clear feedback about successful and failed operations.
 
 ### Automatic Backups
 Every time you save changes, TaskMaster automatically creates timestamped backups in `~/.taskmaster/backups/` to prevent data loss.
